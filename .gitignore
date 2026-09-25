@@ -1,0 +1,13 @@
+# Secrets
+api/config.php
+.env
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
