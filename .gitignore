@@ -2,6 +2,7 @@
 LAMPAPI/config.php
 .env
 *.pem
+*.swp
 
 # OS
 .DS_Store
