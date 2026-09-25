@@ -5,7 +5,7 @@
 	$searchResults = "";
 	$searchCount = 0;
 
-	require __DIR__ . '/config.php';
+	require __DIR__ . '/db.php';
 	if ($conn->connect_error) 
 	{
 		returnWithError( $conn->connect_error );
