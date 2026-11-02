@@ -1,5 +1,8 @@
 @startuml activity
 ' Activity Diagram - Colors web application: login, then search / add / log out
+title Colors application - implemented behavior
+!pragma useVerticalIf on
+skinparam wrapWidth 220
 
 |User|
 start
@@ -10,30 +13,70 @@ start
 |Browser (code.js)|
 :doLogin(): build JSON {login, password};
 :POST LAMPAPI/Login.php;
+note right
+  Applies to all POST actions below:
+  Only readyState 4 / HTTP 200 is processed.
+  Other HTTP statuses and network failures
+  have no error UI. Synchronous xhr.send()
+  exceptions display err.message.
+  Callback exceptions (including JSON parse
+  errors) are not caught by the outer
+  try/catch; the callback ends.
+  Passwords are sent as entered;
+  the MD5 call is commented out.
+end note
 
 |Server (PHP)|
-:Login.php: SELECT ID, firstName, lastName
-FROM Users WHERE Login=? AND Password=?;
-if (Matching row?) then (yes)
-  :Return {id, firstName, lastName, error:""};
+:Load db.php (requires config.php, opens MySQL connection);
+note right
+  Each endpoint has a connect_error branch.
+  PHP / mysqli exceptions, missing config
+  and SQL failures have no application-level
+  exception handler. They may prevent a
+  valid JSON response.
+end note
+if (Connection error reported?) then (yes)
+  :Return {id:0, firstName:~"~", lastName:~"~", error:message};
 else (no)
-  :Return {id:0, error:"No Records Found"};
+  :Login.php: SELECT ID, firstName, lastName
+  FROM Users WHERE Login=? AND Password=?;
+  if (Matching row?) then (yes)
+    :Return {id, firstName, lastName, error:~"~"};
+  else (no)
+    :Return {id:0, firstName:~"~", lastName:~"~", error:"No Records Found"};
+  endif
 endif
 
 |Browser (code.js)|
-if (id < 1?) then (yes)
+if (Completed with HTTP 200?) then (yes)
+  :Parse JSON, assign userId = response.id;
+else (no)
+  :Remain on login page, no response error displayed;
+  stop
+endif
+if (userId < 1?) then (yes)
   :Show "User/Password combination incorrect";
+  :Remain on login page, user may retry;
   stop
 else (no)
-  :saveCookie() (expires in 20 min);
+  :Copy firstName and lastName;
+  :saveCookie(): one firstName cookie contains
+  firstName,lastName,userId (expires in 20 min);
   :Redirect to color.html;
 endif
 
-:readCookie() on page load;
-if (userId found in cookie?) then (no)
+:readCookie() on DOMContentLoaded:
+set userId = -1, read cookie and parseInt(userId) if present;
+note right
+  Runs only on page load, not each action.
+  0 and NaN do not trigger a redirect.
+  A malformed token can throw before the check.
+  The userName assignment is commented out.
+end note
+if (userId < 0?) then (yes)
   :Redirect to index.html;
   stop
-else (yes)
+else (no)
 endif
 
 |User|
@@ -42,7 +85,7 @@ repeat
   if (Log out?) then (yes)
     :Click "Log Out";
     |Browser (code.js)|
-    :doLogout(): expire cookie;
+    :doLogout(): reset user state, expire firstName cookie;
     :Redirect to index.html;
     stop
   else (no)
@@ -51,31 +94,70 @@ repeat
   if (Search or Add?) then (Search)
     :Enter search text, click "Search Color";
     |Browser (code.js)|
+    :Clear colorSearchResult;
     :searchColor(): POST SearchColors.php
     {search, userId};
     |Server (PHP)|
-    :SELECT Name FROM Colors
-    WHERE Name LIKE %search% AND UserID=?;
-    if (Rows found?) then (yes)
-      :Return {results:[...], error:""};
+    :Load db.php;
+    if (Connection error reported?) then (yes)
+      :Return {id:0, firstName:~"~", lastName:~"~", error:message} (no results field);
     else (no)
-      :Return {error:"No Records Found"} (no results field);
+      :SELECT Name FROM Colors
+      WHERE Name LIKE ? AND UserID=?
+      (parameters: "%" + search + "%", supplied userId);
+      if (Rows found?) then (yes)
+        :Return {results:[...], error:~"~"};
+      else (no)
+        :Return {id:0, firstName:~"~", lastName:~"~", error:"No Records Found"} (no results field);
+      endif
     endif
     |Browser (code.js)|
-    :Show "Color(s) has been retrieved";
-    :Render results into #colorList;
+    if (Completed with HTTP 200?) then (yes)
+      :Show "Color(s) has been retrieved";
+      :Parse JSON, attempt loop over jsonObject.results.length;
+      if (results field missing?) then (yes)
+        :Unhandled TypeError ends callback;
+        :Previous color list and retrieval message remain;
+      else (no)
+        :Join results with HTML line breaks;
+        :Replace first p element's innerHTML (#colorList);
+      endif
+    else (no)
+      :No response error displayed, previous color list remains;
+    endif
   else (Add)
     |User|
     :Enter color name, click "Add Color";
     |Browser (code.js)|
+    :Clear colorAddResult;
     :addColor(): POST AddColor.php
     {color, userId};
     |Server (PHP)|
-    :INSERT INTO Colors (UserId, Name);
-    :Return {error:""};
+    :Load db.php;
+    if (Connection error reported?) then (yes)
+      :Return {error:message};
+    else (no)
+      :Execute INSERT INTO Colors (UserId, Name) VALUES (?, ?)
+      (parameters: supplied userId, color);
+      :Return {error:~"~"} if execution continues;
+      note right
+        The execute() return value is not checked.
+      end note
+    endif
     |Browser (code.js)|
-    :Show "Color has been added";
+    if (Completed with HTTP 200?) then (yes)
+      :Show "Color has been added";
+      note right
+        Response body is not parsed.
+        HTTP 200 error responses also
+        show this message.
+      end note
+    else (no)
+      :No response error displayed;
+    endif
   endif
   |User|
-repeat while (Keep working?) is (yes)
+repeat while (Choose another action?) is (yes) not (leave)
+:Leave / close page;
+stop
 @enduml

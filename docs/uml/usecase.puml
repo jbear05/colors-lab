@@ -1,37 +1,42 @@
 @startuml usecase
 ' Use Case Diagram - Colors web application (Labs 1-3)
 skinparam packageStyle rectangle
+title Colors application - user goals
+left to right direction
 
 actor User
-actor "MySQL Database" as DB <<system>>
+actor "MySQL Database" as DB <<supporting system>>
 
-rectangle "Colors Web Application" {
+rectangle "Colors Web Application (browser + PHP)" {
   usecase "Log In" as UC_Login
   usecase "Search Colors" as UC_Search
   usecase "Add Color" as UC_Add
   usecase "Log Out" as UC_Logout
-  usecase "Verify Session\n(read cookie)" as UC_Session
   usecase "Show Login Error" as UC_LoginErr
 }
 
-User --> UC_Login
-User --> UC_Search
-User --> UC_Add
-User --> UC_Logout
+User -- UC_Login
+User -- UC_Search
+User -- UC_Add
+User -- UC_Logout
 
-UC_Search ..> UC_Session : <<include>>
-UC_Add ..> UC_Session : <<include>>
-UC_LoginErr ..> UC_Login : <<extend>>
+UC_LoginErr ..> UC_Login : <<extend>>\n[response.id < 1]
 
-UC_Login --> DB
-UC_Search --> DB
-UC_Add --> DB
+UC_Login -- DB
+UC_Search -- DB
+UC_Add -- DB
 
 legend bottom
-  Log In: POST Login.php {login, password}; on success a 20-minute cookie stores firstName, lastName, userId.
-  Search Colors: POST SearchColors.php {search, userId}; partial match (LIKE %search%) on the user's own colors.
+  Log In: POST Login.php {login, password}; a matching row leads to color.html.
+  One firstName cookie stores firstName,lastName,userId and expires in 20 minutes.
+  Search Colors: POST SearchColors.php {search, userId}; LIKE pattern is "%" + search + "%".
+  Search filters by the supplied userId.
   Add Color: POST AddColor.php {color, userId}.
-  Verify Session: runs on color.html load; no userId in cookie -> redirect to index.html.
+  Log Out: reset browser user state, expire the cookie, and return to index.html.
+  On color.html load only, readCookie() restores state and redirects if userId < 0.
+  Search and Add do not include a session verification step.
+  The PHP endpoints trust the supplied userId; no server session is verified.
+  Error paths are detailed in activity.puml.
   No registration, edit, or delete features exist in the app.
 end legend
 @enduml

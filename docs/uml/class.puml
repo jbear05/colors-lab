@@ -1,6 +1,7 @@
 @startuml class
 ' Class Diagram - Colors web application
 ' The app has no OO classes; each file is modeled as a class with a stereotype.
+title Colors application - file and table structure
 skinparam classAttributeIconSize 0
 hide empty members
 
@@ -25,11 +26,11 @@ package "Client (browser)" {
   }
 
   class "code.js" as CodeJS <<JavaScript>> {
-    {static} urlBase : string = "http://poosdcolorsproject.xyz/LAMPAPI"
-    {static} extension : string = "php"
-    userId : int = 0
-    firstName : string
-    lastName : string
+    urlBase : string = "http://poosdcolorsproject.xyz/LAMPAPI" {readOnly}
+    extension : string = "php" {readOnly}
+    userId : number = 0
+    firstName : string = ""
+    lastName : string = ""
     --
     doLogin() : void
     saveCookie() : void
@@ -40,32 +41,33 @@ package "Client (browser)" {
   }
 
   class "md5.js" as MD5JS <<JavaScript>> {
-    md5(string) : string
+    md5(string, key?, raw?) : string
   }
 }
 
 package "Server (LAMPAPI)" {
   class "Login.php" as LoginAPI <<PHP endpoint>> {
-    getRequestInfo() : array
+    getRequestInfo() : mixed
     sendResultInfoAsJson(obj) : void
     returnWithError(err) : void
     returnWithInfo(firstName, lastName, id) : void
   }
 
   class "AddColor.php" as AddColorAPI <<PHP endpoint>> {
-    getRequestInfo() : array
+    getRequestInfo() : mixed
     sendResultInfoAsJson(obj) : void
     returnWithError(err) : void
   }
 
   class "SearchColors.php" as SearchAPI <<PHP endpoint>> {
-    getRequestInfo() : array
+    getRequestInfo() : mixed
     sendResultInfoAsJson(obj) : void
     returnWithError(err) : void
     returnWithInfo(searchResults) : void
   }
 
   class "db.php" as DB <<PHP>> {
+    config : array
     conn : mysqli
   }
 
@@ -79,16 +81,16 @@ package "Server (LAMPAPI)" {
 
 package "Database (MySQL)" {
   class Users <<table>> {
-    ID : int
-    firstName : varchar
-    lastName : varchar
-    Login : varchar
-    Password : varchar
+    ID
+    firstName
+    lastName
+    Login
+    Password
   }
 
   class Colors <<table>> {
-    UserID : int
-    Name : varchar
+    UserID
+    Name
   }
 }
 
@@ -109,5 +111,17 @@ LoginAPI ..> Users : SELECT
 AddColorAPI ..> Colors : INSERT
 SearchAPI ..> Colors : SELECT ... LIKE
 
-Users "1" -- "0..*" Colors : owns >
+Users "1" -- "0..*" Colors : logical link: ID = UserID
+
+legend bottom
+  Structural model: file boxes use class notation; the app defines no OO classes.
+  Members represent file-scope variables/functions or HTML elements, not instances.
+  md5() is shown as the public API; internal helpers are omitted. ? marks optional arguments.
+  getRequestInfo() uses json_decode(..., true); a valid request object yields an array.
+  config.php is required and gitignored; the listed keys are expected by db.php.
+  Table columns are those referenced by PHP, not a complete database schema.
+  Search uses UserID; INSERT uses UserId (same column; MySQL column names are case-insensitive).
+  1 to 0..* reflects app behavior: each color row stores one user's ID, a user can add many.
+  SQL types, keys, and foreign-key enforcement are unverified because no SQL schema is included.
+end legend
 @enduml
