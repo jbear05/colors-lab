@@ -1,0 +1,113 @@
+@startuml class
+' Class Diagram - Colors web application
+' The app has no OO classes; each file is modeled as a class with a stereotype.
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Client (browser)" {
+  class "index.html" as IndexPage <<page>> {
+    loginName : text input
+    loginPassword : password input
+    loginButton : button
+    loginResult : span
+  }
+
+  class "color.html" as ColorPage <<page>> {
+    userName : span
+    logoutButton : button
+    searchText : text input
+    searchColorButton : button
+    colorSearchResult : span
+    colorList : p
+    colorText : text input
+    addColorButton : button
+    colorAddResult : span
+  }
+
+  class "code.js" as CodeJS <<JavaScript>> {
+    {static} urlBase : string = "http://poosdcolorsproject.xyz/LAMPAPI"
+    {static} extension : string = "php"
+    userId : int = 0
+    firstName : string
+    lastName : string
+    --
+    doLogin() : void
+    saveCookie() : void
+    readCookie() : void
+    doLogout() : void
+    addColor() : void
+    searchColor() : void
+  }
+
+  class "md5.js" as MD5JS <<JavaScript>> {
+    md5(string) : string
+  }
+}
+
+package "Server (LAMPAPI)" {
+  class "Login.php" as LoginAPI <<PHP endpoint>> {
+    getRequestInfo() : array
+    sendResultInfoAsJson(obj) : void
+    returnWithError(err) : void
+    returnWithInfo(firstName, lastName, id) : void
+  }
+
+  class "AddColor.php" as AddColorAPI <<PHP endpoint>> {
+    getRequestInfo() : array
+    sendResultInfoAsJson(obj) : void
+    returnWithError(err) : void
+  }
+
+  class "SearchColors.php" as SearchAPI <<PHP endpoint>> {
+    getRequestInfo() : array
+    sendResultInfoAsJson(obj) : void
+    returnWithError(err) : void
+    returnWithInfo(searchResults) : void
+  }
+
+  class "db.php" as DB <<PHP>> {
+    conn : mysqli
+  }
+
+  class "config.php" as Config <<PHP, gitignored>> {
+    host : string
+    user : string
+    pass : string
+    name : string
+  }
+}
+
+package "Database (MySQL)" {
+  class Users <<table>> {
+    ID : int
+    firstName : varchar
+    lastName : varchar
+    Login : varchar
+    Password : varchar
+  }
+
+  class Colors <<table>> {
+    UserID : int
+    Name : varchar
+  }
+}
+
+IndexPage ..> CodeJS : <<script>>
+IndexPage ..> MD5JS : <<script>>\n(loaded, call commented out)
+ColorPage ..> CodeJS : <<script>>
+
+CodeJS ..> LoginAPI : POST {login, password}
+CodeJS ..> AddColorAPI : POST {color, userId}
+CodeJS ..> SearchAPI : POST {search, userId}
+
+LoginAPI ..> DB : require
+AddColorAPI ..> DB : require
+SearchAPI ..> DB : require
+DB ..> Config : require
+
+LoginAPI ..> Users : SELECT
+AddColorAPI ..> Colors : INSERT
+SearchAPI ..> Colors : SELECT ... LIKE
+
+Users "1" -- "0..*" Colors : owns >
+@enduml
