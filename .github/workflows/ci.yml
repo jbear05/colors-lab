@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:html
+      - run: npm run lint:css
+      - run: npm run lint:js
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: COP4331
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      API_URL: http://127.0.0.1:8000/LAMPAPI
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mysqli
+      - run: npm ci
+
+      - name: Front-end unit tests
+        run: npm run test:unit
+
+      - name: Load test database
+        run: mysql -h 127.0.0.1 -uroot -proot COP4331 < tests/integration/schema.sql
+
+      - name: Write config.php for the test database
+        run: |
+          cat > LAMPAPI/config.php <<'EOF'
+          <?php
+          return ['host' => '127.0.0.1', 'user' => 'root', 'pass' => 'root', 'name' => 'COP4331'];
+          EOF
+
+      - name: API integration tests
+        run: |
+          php -S 127.0.0.1:8000 -t . > php-server.log 2>&1 &
+          for i in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:8000/index.html && break; sleep 0.5; done
+          npm run test:integration
+
+      - name: Show PHP server log
+        if: failure()
+        run: cat php-server.log
